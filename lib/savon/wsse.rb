@@ -68,12 +68,17 @@ module Savon
 
     # Returns the XML for a WSSE header.
     def to_xml
-      if username_token?
-        Gyoku.xml wsse_username_token.merge!(hash)
-      elsif timestamp?
-        Gyoku.xml wsse_timestamp.merge!(hash)
-      else
+      @wsse_security = {}
+
+      wsse_username_token if username_token?
+      wsse_timestamp if timestamp?  
+      
+      xml_hash = @wsse_security.merge(hash)
+      
+      if xml_hash.blank?
         ""
+      else
+        Gyoku.xml xml_hash
       end
     end
 
@@ -103,15 +108,21 @@ module Savon
         "wsu:Expires" => (expires_at || (created_at || Time.now) + 60).xs_datetime
     end
 
-    # Returns a Hash containing wsse:Security details for a given +tag+ and +hash+.
+    # Returns a Hash building wsse:Security details with a given +tag+ and +hash+.
     def wsse_security(tag, hash)
-      {
-        "wsse:Security" => {
-          "wsse:#{tag}" => hash,
-          :attributes! => { "wsse:#{tag}" => { "wsu:Id" => "#{tag}-#{count}", "xmlns:wsu" => WSUNamespace } }
-        },
-        :attributes! => { "wsse:Security" => { "xmlns:wsse" => WSENamespace } }
-      }
+      if @wsse_security.blank?
+        @wsse_security = {
+          "wsse:Security" => {
+            :attributes! => {}
+            },
+            :attributes! => { "wsse:Security" => { "xmlns:wsse" => WSENamespace } }
+        } 
+      end
+
+      @wsse_security["wsse:Security"]["wsse:#{tag}"] = hash
+      @wsse_security["wsse:Security"][:attributes!]["wsse:#{tag}"] = { "wsu:Id" => "#{tag}-#{count}", "xmlns:wsu" => WSUNamespace }
+      
+      @wsse_security
     end
 
     # Returns the WSSE password, encrypted for digest authentication.
